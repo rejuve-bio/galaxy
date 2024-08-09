@@ -64,43 +64,26 @@ class DatasetManager(base.ModelManager[model.Dataset], secured.AccessibleManager
         self.quota_agent = app.quota_agent
         self.security_agent = app.model.security_agent
 
-    def create(self, manage_roles=None, access_roles=None, flush=True, **kwargs):
-        """
-        Create and return a new Dataset object.
-        """
-        # default to NEW state on new datasets
-        kwargs.update(dict(state=(kwargs.get("state", model.Dataset.states.NEW))))
-        dataset = model.Dataset(**kwargs)
-        self.session().add(dataset)
-
-        self.permissions.set(dataset, manage_roles, access_roles, flush=False)
-
-        if flush:
-            session = self.session()
-            with transaction(session):
-                session.commit()
-        return dataset
-
-    def copy(self, dataset, **kwargs):
+    def copy(self, item, **kwargs):
         raise exceptions.NotImplemented("Datasets cannot be copied")
 
-    def purge(self, dataset, flush=True):
+    def purge(self, item, flush=True, **kwargs):
         """
         Remove the object_store/file for this dataset from storage and mark
         as purged.
 
         :raises exceptions.ConfigDoesNotAllowException: if the instance doesn't allow
         """
-        self.error_unless_dataset_purge_allowed(dataset)
+        self.error_unless_dataset_purge_allowed(item)
 
         # the following also marks dataset as purged and deleted
-        dataset.full_delete()
-        self.session().add(dataset)
+        item.full_delete()
+        self.session().add(item)
         if flush:
             session = self.session()
             with transaction(session):
                 session.commit()
-        return dataset
+        return item
 
     def purge_datasets(self, request: PurgeDatasetsTaskRequest):
         """
@@ -376,7 +359,7 @@ class DatasetAssociationManager(
             self.stop_creating_job(item, flush=flush)
         return item
 
-    def purge(self, dataset_assoc, flush=True):
+    def purge(self, item, flush=True, **kwargs):
         """
         Purge this DatasetInstance and the dataset underlying it.
         """
@@ -388,15 +371,15 @@ class DatasetAssociationManager(
         # so that job cleanup associated with stop_creating_job will see
         # the dataset as purged.
         flush_required = not self.app.config.track_jobs_in_database
-        super().purge(dataset_assoc, flush=flush or flush_required)
+        super().purge(item, flush=flush or flush_required, **kwargs)
 
-        # stop any jobs outputing the dataset_assoc
-        self.stop_creating_job(dataset_assoc, flush=True)
+        # stop any jobs outputing the dataset association
+        self.stop_creating_job(item, flush=True)
 
         # more importantly, purge underlying dataset as well
-        if dataset_assoc.dataset.user_can_purge:
-            self.dataset_manager.purge(dataset_assoc.dataset)
-        return dataset_assoc
+        if item.dataset.user_can_purge:
+            self.dataset_manager.purge(item.dataset, flush=flush, **kwargs)
+        return item
 
     def by_user(self, user):
         raise exceptions.NotImplemented("Abstract Method")
@@ -489,12 +472,16 @@ class DatasetAssociationManager(
 
     def ensure_dataset_on_disk(self, trans, dataset):
         # Not a guarantee data is really present, but excludes a lot of expected cases
+        if not dataset.dataset:
+            raise exceptions.InternalServerError("Item has no associated dataset.")
         if dataset.purged or dataset.dataset.purged:
             raise exceptions.ItemDeletionException("The dataset you are attempting to view has been purged.")
         elif dataset.deleted and not (trans.user_is_admin or self.is_owner(dataset, trans.get_user())):
             raise exceptions.ItemDeletionException("The dataset you are attempting to view has been deleted.")
         elif dataset.state == Dataset.states.UPLOAD:
             raise exceptions.Conflict("Please wait until this dataset finishes uploading before attempting to view it.")
+        elif dataset.state == Dataset.states.NEW:
+            raise exceptions.Conflict("The dataset you are attempting to view is new and has no data.")
         elif dataset.state == Dataset.states.DISCARDED:
             raise exceptions.ItemDeletionException("The dataset you are attempting to view has been discarded.")
         elif dataset.state == Dataset.states.DEFERRED:
@@ -543,7 +530,7 @@ class DatasetAssociationManager(
         if overwrite:
             self.overwrite_metadata(data)
 
-        job, *_ = self.app.datatypes_registry.set_external_metadata_tool.tool_action.execute(
+        job, *_ = self.app.datatypes_registry.set_external_metadata_tool.tool_action.execute_via_trans(
             self.app.datatypes_registry.set_external_metadata_tool,
             trans,
             incoming={"input1": data, "validate": validate},
@@ -778,7 +765,7 @@ class DatasetAssociationSerializer(_UnflattenedMetadataDatasetAssociationSeriali
         # remove the single nesting key here
         del self.serializers["metadata"]
 
-    def serialize(self, dataset_assoc, keys, **context):
+    def serialize(self, item, keys, **context):
         """
         Override to add metadata as flattened keys on the serialized DatasetInstance.
         """
@@ -786,11 +773,11 @@ class DatasetAssociationSerializer(_UnflattenedMetadataDatasetAssociationSeriali
         # TODO: remove these when metadata is sub-object
         KEYS_HANDLED_SEPARATELY = ("metadata",)
         left_to_handle = self._pluck_from_list(keys, KEYS_HANDLED_SEPARATELY)
-        serialized = super().serialize(dataset_assoc, keys, **context)
+        serialized = super().serialize(item, keys, **context)
 
         # add metadata directly to the dict instead of as a sub-object
         if "metadata" in left_to_handle:
-            metadata = self._prefixed_metadata(dataset_assoc)
+            metadata = self._prefixed_metadata(item)
             serialized.update(metadata)
         return serialized
 
@@ -879,7 +866,7 @@ class DatasetAssociationDeserializer(base.ModelDeserializer, deletable.PurgableD
         assert (
             trans
         ), "Logic error in Galaxy, deserialize_datatype not send a transation object"  # TODO: restructure this for stronger typing
-        job, *_ = self.app.datatypes_registry.set_external_metadata_tool.tool_action.execute(
+        job, *_ = self.app.datatypes_registry.set_external_metadata_tool.tool_action.execute_via_trans(
             self.app.datatypes_registry.set_external_metadata_tool, trans, incoming={"input1": item}, overwrite=False
         )  # overwrite is False as per existing behavior
         trans.app.job_manager.enqueue(job, tool=trans.app.datatypes_registry.set_external_metadata_tool)

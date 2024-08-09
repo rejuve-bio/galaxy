@@ -1,3 +1,4 @@
+import { getFakeRegisteredUser } from "@tests/test-data";
 import { mount } from "@vue/test-utils";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
@@ -76,10 +77,7 @@ async function createWrapper(localVue, currentUserId, history) {
         pinia,
     });
     const userStore = useUserStore();
-    const userData = {
-        id: currentUserId,
-    };
-    userStore.currentUser = { ...userStore.currentUser, ...userData };
+    userStore.currentUser = getFakeRegisteredUser({ id: currentUserId });
     await flushPromises();
     return wrapper;
 }
@@ -185,7 +183,9 @@ describe("History center panel View", () => {
         expect(storageDashboardButtonDisabled(wrapper)).toBeFalsy();
 
         // instead we have an alert
-        expect(wrapper.find("[data-description='history messages']").text()).toBe("History has been purged");
+        expect(wrapper.find("[data-description='history messages']").text()).toBe(
+            "History has been permanently deleted"
+        );
     });
 
     it("should not display archived message and should be importable when user is not owner and history is archived", async () => {

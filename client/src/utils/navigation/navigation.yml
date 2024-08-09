@@ -42,7 +42,6 @@ masthead:
 
     help: '#help'
     home: '#analysis'
-    libraries: '#library'
     login: '#user'
     logout: '.dropdown-menu > li > a > .fa-sign-out-alt'
     logged_in_only: '.loggedin-only'
@@ -614,7 +613,7 @@ workflows:
     rename_input: '#workflow-name-input'
     workflow_drop_down: '[data-workflow-actions-dropdown]'
     delete_button: '.workflow-delete-button'
-    view_button: '.workflow-view-button'
+    view_button: '.workflow-name-preview'
     workflow_preview_container: '.workflow-card-preview-modal .workflow-published .published-workflow'
     workflow_preview_information: '.workflow-information'
     view_external_link: ".workflow-view-external-link-button"
@@ -1008,6 +1007,7 @@ libraries:
 
   selectors:
     _: '#libraries_list'
+    activity: '#activity-libraries'
     create_new_library_btn: '#create-new-lib'
     permission_library_btn: '.permission_library_btn'
     toolbtn_save_permissions: '.toolbtn_save_permissions'

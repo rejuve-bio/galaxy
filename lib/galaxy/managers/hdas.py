@@ -228,14 +228,14 @@ class HDAManager(
         return copy
 
     # .... deletion and purging
-    def purge(self, hda, flush=True, **kwargs):
+    def purge(self, item, flush=True, **kwargs):
         if self.app.config.enable_celery_tasks:
             from galaxy.celery.tasks import purge_hda
 
             user = kwargs.get("user")
-            return purge_hda.delay(hda_id=hda.id, task_user_id=getattr(user, "id", None))
+            return purge_hda.delay(hda_id=item.id, task_user_id=getattr(user, "id", None))
         else:
-            self._purge(hda, flush=flush)
+            self._purge(item, flush=flush)
 
     def _purge(self, hda, flush=True):
         """
@@ -311,7 +311,10 @@ class HDAManager(
 
         truncated = preview and os.stat(file_path).st_size > MAX_PEEK_SIZE
         with get_fileobj(file_path) as fh:
-            hda_data = fh.read(MAX_PEEK_SIZE)
+            try:
+                hda_data = fh.read(MAX_PEEK_SIZE)
+            except UnicodeDecodeError:
+                raise exceptions.RequestParameterInvalidException("Cannot generate text preview for dataset.")
         return truncated, hda_data
 
     # .... annotatable

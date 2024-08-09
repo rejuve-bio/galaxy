@@ -51,6 +51,7 @@ from galaxy.model import (
     StoredWorkflow,
 )
 from galaxy.model.base import transaction
+from galaxy.model.dataset_collections.matching import MatchingCollections
 from galaxy.tool_shed.util.repository_util import get_installed_repository
 from galaxy.tool_shed.util.shed_util_common import set_image_paths
 from galaxy.tool_util.deps import (
@@ -81,6 +82,10 @@ from galaxy.tool_util.parser.interface import (
     PageSource,
     ToolSource,
 )
+from galaxy.tool_util.parser.util import (
+    parse_profile_version,
+    parse_tool_version_with_defaults,
+)
 from galaxy.tool_util.parser.xml import (
     XmlPageSource,
     XmlToolSource,
@@ -93,6 +98,7 @@ from galaxy.tool_util.toolbox import (
 )
 from galaxy.tool_util.toolbox.views.sources import StaticToolBoxViewSources
 from galaxy.tool_util.verify.interactor import ToolTestDescription
+from galaxy.tool_util.verify.parse import parse_tool_test_descriptions
 from galaxy.tool_util.verify.test_data import TestDataNotFoundError
 from galaxy.tool_util.version import (
     LegacyVersion,
@@ -108,6 +114,7 @@ from galaxy.tools.actions.data_source import DataSourceToolAction
 from galaxy.tools.actions.model_operations import ModelOperationToolAction
 from galaxy.tools.cache import ToolDocumentCache
 from galaxy.tools.evaluation import global_tool_errors
+from galaxy.tools.execution_helpers import ToolExecutionCache
 from galaxy.tools.imp_exp import JobImportHistoryArchiveWrapper
 from galaxy.tools.parameters import (
     check_param,
@@ -145,7 +152,6 @@ from galaxy.tools.parameters.input_translation import ToolInputTranslator
 from galaxy.tools.parameters.meta import expand_meta_parameters
 from galaxy.tools.parameters.workflow_utils import workflow_building_modes
 from galaxy.tools.parameters.wrapped_json import json_wrap
-from galaxy.tools.test import parse_tests
 from galaxy.util import (
     in_directory,
     listify,
@@ -160,7 +166,7 @@ from galaxy.util import (
 )
 from galaxy.util.bunch import Bunch
 from galaxy.util.compression_utils import get_fileobj_raw
-from galaxy.util.dictifiable import Dictifiable
+from galaxy.util.dictifiable import UsesDictVisibleKeys
 from galaxy.util.expressions import ExpressionContext
 from galaxy.util.form_builder import SelectField
 from galaxy.util.json import (
@@ -179,8 +185,18 @@ from galaxy.util.tool_shed.common_util import (
 from galaxy.version import VERSION_MAJOR
 from galaxy.work.context import proxy_work_context_for_history
 from .execute import (
+    DatasetCollectionElementsSliceT,
+    DEFAULT_JOB_CALLBACK,
+    DEFAULT_PREFERRED_OBJECT_STORE_ID,
+    DEFAULT_RERUN_REMAP_JOB_ID,
+    DEFAULT_SET_OUTPUT_HID,
+    DEFAULT_USE_CACHED_JOB,
     execute as execute_job,
+    ExecutionSlice,
+    JobCallbackT,
     MappingParameters,
+    ToolParameterRequestInstanceT,
+    ToolParameterRequestT,
 )
 
 if TYPE_CHECKING:
@@ -379,7 +395,7 @@ class PersistentToolTagManager(AbstractToolTagManager):
 
     def reset_tags(self):
         log.info(
-            f"removing all tool tag associations ({str(self.sa_session.scalar(select(func.count(self.app.model.ToolTagAssociation))))})"
+            f"removing all tool tag associations ({str(self.sa_session.scalar(select(func.count(self.app.model.ToolTagAssociation.id))))})"
         )
         self.sa_session.execute(delete(self.app.model.ToolTagAssociation))
         with transaction(self.sa_session):
@@ -566,6 +582,8 @@ class ToolBox(AbstractToolBox):
     def create_dynamic_tool(self, dynamic_tool, **kwds):
         tool_format = dynamic_tool.tool_format
         tool_representation = dynamic_tool.value
+        if "name" not in tool_representation:
+            tool_representation["name"] = f"dynamic tool {dynamic_tool.uuid}"
         tool_source = get_tool_source_from_representation(
             tool_format=tool_format,
             tool_representation=tool_representation,
@@ -724,7 +742,7 @@ class _Options(Bunch):
     refresh: str
 
 
-class Tool(Dictifiable):
+class Tool(UsesDictVisibleKeys):
     """
     Represents a computational tool that can be executed through Galaxy.
     """
@@ -1004,7 +1022,7 @@ class Tool(Dictifiable):
         """
         Read tool configuration from the element `root` and fill in `self`.
         """
-        self.profile = float(tool_source.parse_profile())
+        self.profile = parse_profile_version(tool_source)
         # Get the UNIQUE id for the tool
         self.old_id = tool_source.parse_id()
         if guid is None:
@@ -1030,18 +1048,13 @@ class Tool(Dictifiable):
 
         # Get the (user visible) name of the tool
         self.name = tool_source.parse_name()
-        if not self.name and dynamic:
+        if not self.name and dynamic and self.id:
             self.name = self.id
         if not dynamic and not self.name:
             raise Exception(f"Missing tool 'name' for tool with id '{self.id}' at '{tool_source}'")
 
-        self.version = tool_source.parse_version()
-        if not self.version:
-            if profile < Version("16.04"):
-                # For backward compatibility, some tools may not have versions yet.
-                self.version = "1.0.0"
-            else:
-                raise Exception(f"Missing tool 'version' for tool with id '{self.id}' at '{tool_source}'")
+        version = parse_tool_version_with_defaults(self.id, tool_source, profile)
+        self.version = version
 
         # Legacy feature, ignored by UI.
         self.force_history_refresh = False
@@ -1305,9 +1318,10 @@ class Tool(Dictifiable):
             self.trackster_conf = TracksterConfig.parse(trackster_conf)
 
     def parse_tests(self):
-        if tests_source := self.tool_source:
+        if self.tool_source:
+            test_descriptions = parse_tool_test_descriptions(self.tool_source, self.id)
             try:
-                self.__tests = json.dumps([t.to_dict() for t in parse_tests(self, tests_source)], indent=None)
+                self.__tests = json.dumps([t.to_dict() for t in test_descriptions], indent=None)
             except Exception:
                 self.__tests = None
                 log.exception("Failed to parse tool tests for tool '%s'", self.id)
@@ -1476,22 +1490,12 @@ class Tool(Dictifiable):
         self.stdio_regexes = regexes
 
     def _parse_citations(self, tool_source):
-        # TODO: Move following logic into ToolSource abstraction.
-        if not hasattr(tool_source, "root"):
-            return []
-
-        root = tool_source.root
-        citations: List[str] = []
-        citations_elem = root.find("citations")
-        if citations_elem is None:
-            return citations
-
-        for citation_elem in citations_elem:
-            if citation_elem.tag != "citation":
-                pass
-            citations_manager = getattr(self.app, "citations_manager", None)
-            if citations_manager is not None:
-                citation = citations_manager.parse_citation(citation_elem)
+        citation_models = tool_source.parse_citations()
+        citations_manager = getattr(self.app, "citations_manager", None)
+        citations = []
+        if citations_manager is not None:
+            for citation_model in citation_models:
+                citation = citations_manager.parse_citation(citation_model)
                 if citation:
                     citations.append(citation)
         return citations
@@ -1870,11 +1874,11 @@ class Tool(Dictifiable):
     def handle_input(
         self,
         trans,
-        incoming,
-        history=None,
-        use_cached_job=False,
-        preferred_object_store_id: Optional[str] = None,
-        input_format="legacy",
+        incoming: ToolParameterRequestT,
+        history: Optional[model.History] = None,
+        use_cached_job: bool = DEFAULT_USE_CACHED_JOB,
+        preferred_object_store_id: Optional[str] = DEFAULT_PREFERRED_OBJECT_STORE_ID,
+        input_format: str = "legacy",
     ):
         """
         Process incoming parameters for this tool from the dict `incoming`,
@@ -1950,23 +1954,23 @@ class Tool(Dictifiable):
     def handle_single_execution(
         self,
         trans,
-        rerun_remap_job_id,
-        execution_slice,
-        history,
-        execution_cache=None,
-        completed_job=None,
-        collection_info=None,
-        job_callback=None,
-        preferred_object_store_id=None,
-        flush_job=True,
-        skip=False,
+        rerun_remap_job_id: Optional[int],
+        execution_slice: ExecutionSlice,
+        history: model.History,
+        execution_cache: ToolExecutionCache,
+        completed_job: Optional[model.Job],
+        collection_info: Optional[MatchingCollections],
+        job_callback: Optional[JobCallbackT],
+        preferred_object_store_id: Optional[str],
+        flush_job: bool,
+        skip: bool,
     ):
         """
         Return a pair with whether execution is successful as well as either
         resulting output data or an error message indicating the problem.
         """
         try:
-            rval = self.execute(
+            rval = self._execute(
                 trans,
                 incoming=execution_slice.param_combination,
                 history=history,
@@ -2053,18 +2057,67 @@ class Tool(Dictifiable):
                 args[key] = param.get_initial_value(trans, None)
         return args
 
-    def execute(self, trans, incoming=None, set_output_hid=True, history=None, **kwargs):
+    def execute(
+        self,
+        trans,
+        incoming: Optional[ToolParameterRequestInstanceT] = None,
+        history: Optional[model.History] = None,
+        set_output_hid: bool = DEFAULT_SET_OUTPUT_HID,
+        flush_job: bool = True,
+    ):
         """
         Execute the tool using parameter values in `incoming`. This just
         dispatches to the `ToolAction` instance specified by
         `self.tool_action`. In general this will create a `Job` that
         when run will build the tool's outputs, e.g. `DefaultToolAction`.
+
+        _execute has many more options but should be accessed through
+        handle_single_execution. The public interface to execute should be
+        rarely used and in more specific ways.
         """
+        return self._execute(
+            trans,
+            incoming=incoming,
+            history=history,
+            set_output_hid=set_output_hid,
+            flush_job=flush_job,
+        )
+
+    def _execute(
+        self,
+        trans,
+        incoming: Optional[ToolParameterRequestInstanceT] = None,
+        history: Optional[model.History] = None,
+        rerun_remap_job_id: Optional[int] = DEFAULT_RERUN_REMAP_JOB_ID,
+        execution_cache: Optional[ToolExecutionCache] = None,
+        dataset_collection_elements: Optional[DatasetCollectionElementsSliceT] = None,
+        completed_job: Optional[model.Job] = None,
+        collection_info: Optional[MatchingCollections] = None,
+        job_callback: Optional[JobCallbackT] = DEFAULT_JOB_CALLBACK,
+        preferred_object_store_id: Optional[str] = DEFAULT_PREFERRED_OBJECT_STORE_ID,
+        set_output_hid: bool = DEFAULT_SET_OUTPUT_HID,
+        flush_job: bool = True,
+        skip: bool = False,
+    ):
         if incoming is None:
             incoming = {}
         try:
             return self.tool_action.execute(
-                self, trans, incoming=incoming, set_output_hid=set_output_hid, history=history, **kwargs
+                self,
+                trans,
+                incoming=incoming,
+                history=history,
+                job_params=None,
+                rerun_remap_job_id=rerun_remap_job_id,
+                execution_cache=execution_cache,
+                dataset_collection_elements=dataset_collection_elements,
+                completed_job=completed_job,
+                collection_info=collection_info,
+                job_callback=job_callback,
+                preferred_object_store_id=preferred_object_store_id,
+                set_output_hid=set_output_hid,
+                flush_job=flush_job,
+                skip=skip,
             )
         except exceptions.ToolExecutionError as exc:
             job = exc.job
@@ -2405,7 +2458,7 @@ class Tool(Dictifiable):
         """Returns dict of tool."""
 
         # Basic information
-        tool_dict = super().to_dict()
+        tool_dict = self._dictify_view_keys()
 
         tool_dict["edam_operations"] = self.edam_operations
         tool_dict["edam_topics"] = self.edam_topics
@@ -2996,7 +3049,9 @@ class SetMetadataTool(Tool):
     requires_setting_metadata = False
     tool_action: "SetMetadataToolAction"
 
-    def regenerate_imported_metadata_if_needed(self, hda, history, user, session_id):
+    def regenerate_imported_metadata_if_needed(
+        self, hda: model.HistoryDatasetAssociation, history: model.History, user: model.User, session_id: int
+    ):
         if hda.has_metadata_files:
             job, *_ = self.tool_action.execute_via_app(
                 self,
@@ -3812,8 +3867,14 @@ class RelabelFromFileTool(DatabaseOperationTool):
         if how_type == "tabular":
             # We have a tabular file, where the first column is an existing element identifier,
             # and the second column is the new element identifier.
+            new_labels_dict = {}
             source_new_label = (line.strip().split("\t") for line in new_labels)
-            new_labels_dict = dict(source_new_label)
+            for i, label_pair in enumerate(source_new_label):
+                if not len(label_pair) == 2:
+                    raise exceptions.MessageException(
+                        f"Relabel mapping file line {i + 1} contains {len(label_pair)} columns, but 2 are required"
+                    )
+                new_labels_dict[label_pair[0]] = label_pair[1]
             for dce in hdca.collection.elements:
                 dce_object = dce.element_object
                 element_identifier = dce.element_identifier
