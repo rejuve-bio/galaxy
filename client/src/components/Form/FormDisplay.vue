@@ -1,5 +1,9 @@
 <template>
-    <FormInputs
+    <div>
+        
+        <ReactFlow />
+        
+        <!-- <FormInputs
         :key="id"
         :inputs="formInputs"
         :loading="loading"
@@ -12,18 +16,24 @@
         :collapsed-disable-icon="collapsedDisableIcon"
         :on-change="onChange"
         :on-change-form="onChangeForm"
-        :workflow-building-mode="workflowBuildingMode" />
+        :workflow-building-mode="workflowBuildingMode" /> -->
+
+    </div>
+
+        
 </template>
 
 <script>
 import Vue from "vue";
 
-import FormInputs from "./FormInputs";
+// import FormInputs from "./FormInputs";
+import ReactFlow from "./../ReactFlow";
 import { matchInputs, validateInputs, visitInputs } from "./utilities";
 
 export default {
     components: {
-        FormInputs,
+        // FormInputs,
+        VueFlow,
     },
     props: {
         id: {
