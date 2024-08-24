@@ -33,8 +33,7 @@ import { matchInputs, validateInputs, visitInputs } from "./utilities";
 export default {
     components: {
         // FormInputs,
-        VueFlow,
-    },
+        ReactFlow    },
     props: {
         id: {
             type: String,
