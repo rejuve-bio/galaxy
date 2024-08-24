@@ -77,6 +77,14 @@ module.exports = (env = {}, argv = {}) => {
                 underscore: path.resolve(__dirname, "node_modules/underscore"),
                 // client-side application config
                 config$: path.join(scriptsBase, "config", targetEnv) + ".js",
+
+                "@vue-flow/background": "https://vueflow.dev/vue-flow-background.mjs",
+                "@vue-flow/controls": "https://vueflow.dev/vue-flow-controls.mjs",
+                "@vue-flow/minimap": "https://vueflow.dev/vue-flow-minimap.mjs",
+                "@vue-flow/core": "https://vueflow.dev/vue-flow-core.mjs",
+                "@vue-flow/node-resizer": "https://vueflow.dev/vue-flow-node-resizer.mjs",
+                "@vue-flow/node-toolbar": "https://vueflow.dev/vue-flow-node-toolbar.mjs"
+            
             },
         },
         optimization: {
