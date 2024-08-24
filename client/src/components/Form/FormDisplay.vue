@@ -1,7 +1,7 @@
 <template>
     <div>
         
-        <ReactFlow />
+        <VueFlow />
         
         <!-- <FormInputs
         :key="id"
@@ -27,13 +27,13 @@
 import Vue from "vue";
 
 // import FormInputs from "./FormInputs";
-import ReactFlow from "./../ReactFlow";
+import VueFlow from "../VueFlow";
 import { matchInputs, validateInputs, visitInputs } from "./utilities";
 
 export default {
     components: {
         // FormInputs,
-        ReactFlow    },
+        VueFlow    },
     props: {
         id: {
             type: String,
