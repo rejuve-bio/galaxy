@@ -33,7 +33,17 @@ import { matchInputs, validateInputs, visitInputs } from "./utilities";
 export default {
     components: {
         // FormInputs,
-        ReactFlow    },
+        ReactFlow    
+    },
+    mounted(){
+        console.log('mounted')
+        window.addEventListener("message", (e) => {
+            console.log({origin:e.origin})
+            console.log(e.data)
+            // console.log(this.$refs.iframe.value.contentWindow)
+        });
+
+    },
     props: {
         id: {
             type: String,

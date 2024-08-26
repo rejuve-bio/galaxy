@@ -14,8 +14,8 @@ export function overrideProductionConsole() {
         defaultEnabled = false;
     }
 
-    // const isEnabled = useLocalStorage("console-debugging-enabled", defaultEnabled);
-    const isEnabled = true
+    const isEnabled = useLocalStorage("console-debugging-enabled", defaultEnabled);
+    // const isEnabled = true
 
     let storedConsole = null;
 
