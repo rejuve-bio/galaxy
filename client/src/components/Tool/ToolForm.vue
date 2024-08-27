@@ -41,7 +41,7 @@
             @onChangeVersion="onChangeVersion">
             <template v-slot:body>
                 <div class="mt-2 mb-4">
-                    <Heading h2 separator bold size="sm"> Tool Parameters </Heading>
+                    <Heading h2 separator bold size="sm"> dfgdf Tool Parameters </Heading>
                     <FormDisplay
                         :id="toolId"
                         :inputs="formConfig.inputs"
