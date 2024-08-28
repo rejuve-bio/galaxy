@@ -2,7 +2,7 @@
       
         <iframe 
         ref="iframe"
-        src="http://localhost:5173/" 
+        src="./index.html" 
         style="width: 100%; height: 50vh" frameborder="0"></iframe>
 
 </template>
