@@ -34,6 +34,7 @@ const STATIC_PLUGIN_BUILD_IDS = [
     "PCA_3Dplot",
     "phylocanvas",
     "pv",
+    "qb",
     "scatterplot",
     "tiffviewer",
     "ts_visjs",
