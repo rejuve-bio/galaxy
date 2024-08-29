@@ -2,13 +2,12 @@
   "name": "qb",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "devDependencies": {
     "parcel": "^2.11.0",
     "typescript": "^5.5.4"
   },
   "scripts": {
-    "build": "parcel build src/script.js --dist-dir static"
+    "build": "parcel build src/script.js src/script.css --dist-dir static"
   },
   "author": "",
   "license": "ISC",
