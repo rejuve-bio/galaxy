@@ -13,11 +13,5 @@
     </params>
     <entry_point entry_point_type="chart" src="index.js" css="index.css"/>
     <render_target>_top</render_target>
-    <settings>
-        <input>
-            <name>explorer</name>
-            <value>false</value>
-            <type>boolean</type>
-        </input>
-    </settings>
+    
 </visualization>
