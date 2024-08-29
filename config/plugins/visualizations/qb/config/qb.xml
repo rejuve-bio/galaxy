@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE visualization SYSTEM "../../visualization.dtd">
 <visualization name="QB" embeddable="false">
-    <description>rejuve query builder</description>
+    <description>Query builder developed by rejuve.bio https://www.rejuve.bio/</description>
     <data_sources>
         <data_source>
             <model_class>HistoryDatasetAssociation</model_class>
@@ -11,7 +11,8 @@
     <params>
         <param type="dataset" var_name_in_template="hda" required="true">dataset_id</param>
     </params>
-    <entry_point entry_point_type="chart" src="dist/index.js" css="dist/index.css"/>
+    <entry_point entry_point_type="chart" src="index.js" css="index.css"/>
+    <render_target>_top</render_target>
     <settings>
         <input>
             <name>explorer</name>
