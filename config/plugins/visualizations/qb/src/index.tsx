@@ -19,15 +19,12 @@ window.bundleEntries.load = function (options) {
   const explorer = settings.get("explorer");
   const url =
     window.location.origin +
-    prefixedDownloadUrl(
-      options.root,
-      "/api/datasets/" + dataset.id + "/content"
-    );
+    prefixedDownloadUrl(options.root,dataset.download_url);
   const root = createRoot(document.getElementById(options.target));
     root.render(
       <React.StrictMode>
         <ReactFlowProvider>
-          <App />
+          <App URL={url} />
         </ReactFlowProvider>
       </React.StrictMode>
     );

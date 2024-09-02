@@ -1,7 +1,13 @@
+import { CloudCog } from "lucide-react";
 import QueryBuilder from "./components/query-builder/QueryBuilder";
 import { EDGE_TYPES } from "./schema/schema";
 
-export default function App() {
+export default function App({URL}:any) {
+  console.log({URL})
+  fetch(URL).then((data)=>{
+    // console.log("hello", data)
+    alert(JSON.stringify(data))
+  })
   const runQuery = async (graph: any) => {
     const requestJSON = {
       requests: {
@@ -25,6 +31,8 @@ export default function App() {
       },
     };
 
+    alert(JSON.stringify(requestJSON))
+
     // const response = await fetch("http://localhost:5000/query", {
     //   method: "POST",
     //   body: JSON.stringify(requestJSON),
@@ -40,7 +48,9 @@ export default function App() {
     <div className="h-full w-full">
       <div className="flex h-screen flex-col">
         <header className="border-b px-12 py-4">
-          <h1 className="text-xl font-medium">Query Builder</h1>
+          <h1 className="text-xl font-medium text-red-600">Query Builder</h1>
+          <p>jd</p>
+          <p>{URL}</p>
         </header>
         <div className="relative flex-grow">
           <QueryBuilder onSubmit={runQuery} />
