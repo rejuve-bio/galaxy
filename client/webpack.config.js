@@ -256,8 +256,8 @@ module.exports = (env = {}, argv = {}) => {
                 writeToDisk: true,
             },
             hot: true,
-            port: process.env.WEBPACK_PORT || 8081,
-            host: "0.0.0.0",
+            port: process.env.WEBPACK_PORT || 8083,
+            host: "100.67.47.42",
             // proxy *everything* to the galaxy server.
             // someday, when we have a fully API-driven independent client, this
             // can be a more limited set -- e.g. `/api`, `/auth`
