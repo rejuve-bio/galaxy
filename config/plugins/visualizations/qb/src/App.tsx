@@ -240,16 +240,17 @@ export default function App({template}:any) {
       },
     };
 
-    // const response = await fetch("http://localhost:5000/query", {
-    //   method: "POST",
-    //   body: JSON.stringify(requestJSON),
-    //   headers: new Headers({ "content-type": "application/json" }),
-    // });
-    // const resultGraph = await response.json();
-    // if (!resultGraph?.nodes?.length) {
-    //   return alert("No matching result for the query.");
-    // }
-  };
+    await fetch("/api/tools", 
+      {
+        method: "POST",
+        headers: new Headers({ 
+          "Content-Type": "application/json",
+      }),
+        body: JSON.stringify({
+        inputs:requestJSON,
+        tool_id	:"rej",
+      }),
+    });  };
 
   return (
     <div className="h-full w-full">
