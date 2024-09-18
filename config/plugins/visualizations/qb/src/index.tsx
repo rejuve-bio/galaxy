@@ -24,6 +24,7 @@ window.bundleEntries.load = async function (options) {
   async function load(URL){
     const response = await axios.get(URL);
     let temp = {};
+    console.log(response.data)
     temp["query"] = (response.data);
     return temp;
   }

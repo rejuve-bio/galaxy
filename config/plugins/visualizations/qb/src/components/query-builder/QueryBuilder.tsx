@@ -43,6 +43,7 @@ export default function QueryBuilder({
   const { screenToFlowPosition, getNode, toObject } = useReactFlow();
 
   useEffect(() => {
+    console.log({graph})
     const loadInitialGraph = async () => {
       if (graph) {
         setNodes(graph.nodes || []);
