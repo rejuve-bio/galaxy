@@ -4,7 +4,7 @@ annotated-types==0.7.0
 boto3-stubs==1.42.9
 botocore-stubs==1.42.9
 cffi==2.0.0 ; platform_python_implementation != 'PyPy'
-cryptography==46.0.3
+cryptography==46.0.5
 librt==0.7.3
 lxml-stubs==0.5.1
 mypy==1.19.0
