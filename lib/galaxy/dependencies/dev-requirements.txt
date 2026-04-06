@@ -119,7 +119,7 @@ packaging==25.0 ; python_full_version >= '3.10'
 pathspec==0.12.1
 pfzy==0.3.4
 pillow==11.3.0 ; python_full_version < '3.10'
-pillow==12.0.0 ; python_full_version >= '3.10'
+pillow==12.1.1 ; python_full_version >= '3.10'
 pkce==1.0.3
 platformdirs==4.4.0 ; python_full_version < '3.10'
 platformdirs==4.5.1 ; python_full_version >= '3.10'
